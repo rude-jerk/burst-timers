@@ -23,6 +23,8 @@ Use `/bursttimers` to position and lock the bars. If you previously loaded the d
 
 ## Behavior
 
+- A second, independently movable group shows live remaining durations for Dokumori on your current target, the four tracked party buffs on you, and your active stat potion. These bars are labeled `(active)`, drain as the effects expire, refresh on reapplication, and disappear when the status is removed. Duplicate effects share one bar showing the longest remaining duration. Switching targets immediately updates the active Dokumori bar without changing its cooldown timer.
+- Toggle **Show active buff/debuff duration bars** in `/bursttimers`. Unlock to move either group; **Reset duration position** places the active bars beside the cooldown group. Preview displays both groups. Dokumori stays orange in both.
 - Dokumori uses a distinct orange bar that deepens to orange-red for the final 20%. Party buffs and potion retain the periwinkle/salmon palette.
 - Seeing Dokumori (status 3849) on your current hard target starts one 120-second countdown, regardless of which Ninja applied it.
 - Additional applications, multiple Ninjas, and target changes cannot restart or duplicate an active countdown. Losing the target or the debuff does not stop it.

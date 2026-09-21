@@ -3,7 +3,7 @@
   "Name": "Burst Timers",
   "InternalName": "BurstTimers",
   "RepoUrl": "https://github.com/rude-jerk/burst-timers",
-  "Punchline": "Party buff, Dokumori, and personal potion countdown bars.",
+  "Punchline": "Cooldown and active-duration bars for party buffs, Dokumori, and potions.",
   "Description": "Shows single two-minute timers for Dokumori on your target and Embolden, Starry Muse, Brotherhood, and Searing Light on you, plus your actual combat potion cooldown. Configure with /bursttimers.",
   "ApplicableVersion": "any",
   "DalamudApiLevel": 15,

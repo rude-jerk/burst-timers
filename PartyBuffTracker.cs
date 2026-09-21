@@ -4,6 +4,7 @@ public sealed class PartyBuffTracker(string name, params uint[] statusIds)
 {
     public string Name { get; } = name;
     public StatusCooldownTimer Timer { get; } = new();
+    public float DurationRemaining(ActiveEffects effects) => effects.Remaining(statusIds);
 
     public void Update(double now, IReadOnlySet<uint> activeStatuses) =>
         Timer.Update(now, statusIds.Any(activeStatuses.Contains));

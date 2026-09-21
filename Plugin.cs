@@ -22,6 +22,8 @@ public sealed unsafe class Plugin : IDalamudPlugin
     private readonly StatusCooldownTimer dokumori = new();
     private readonly PartyBuffTracker[] partyBuffs = PartyBuffTracker.CreateAll();
     private readonly HashSet<uint> activePlayerStatuses = [];
+    private readonly ActiveEffects playerEffects = new();
+    private readonly ActiveEffects targetEffects = new();
     private bool settingsOpen;
     private bool preview;
     private float potionRemaining;
@@ -57,6 +59,8 @@ public sealed unsafe class Plugin : IDalamudPlugin
         foreach (var buff in partyBuffs)
             buff.Timer.Reset();
         activePlayerStatuses.Clear();
+        playerEffects.Clear();
+        targetEffects.Clear();
         potionRemaining = potionTotal = 0;
     }
 
@@ -64,15 +68,22 @@ public sealed unsafe class Plugin : IDalamudPlugin
     {
         if (!client.IsLoggedIn)
             return;
-        bool present = targets.Target is IBattleChara target &&
-            target.StatusList.Any(status => status.StatusId == 3849 && status.RemainingTime > 0);
+        targetEffects.Clear();
+        if (targets.Target is IBattleChara target)
+            foreach (var status in target.StatusList)
+                targetEffects.Observe(status.StatusId, status.RemainingTime);
+        bool present = targetEffects.Remaining(3849) > 0;
         var now = Now;
         dokumori.Update(now, present);
         activePlayerStatuses.Clear();
+        playerEffects.Clear();
         if (objects.LocalPlayer is { } player)
             foreach (var status in player.StatusList)
                 if (status.RemainingTime > 0)
+                {
                     activePlayerStatuses.Add(status.StatusId);
+                    playerEffects.Observe(status.StatusId, status.RemainingTime);
+                }
         foreach (var buff in partyBuffs)
             buff.Update(now, activePlayerStatuses);
 
@@ -90,12 +101,6 @@ public sealed unsafe class Plugin : IDalamudPlugin
             DrawSettings();
         if (!client.IsLoggedIn)
             return;
-        var now = Now;
-        var dokuLeft = (float)dokumori.Remaining(now);
-        var showPreview = preview || !config.Locked;
-        int buffCount = partyBuffs.Count(buff => showPreview || buff.Timer.Remaining(now) > 0);
-        if (!showPreview && dokuLeft <= 0 && potionRemaining <= 0 && buffCount == 0)
-            return;
 
         if (timelineFont == null || loadedFontSize != config.FontSize)
         {
@@ -104,34 +109,52 @@ public sealed unsafe class Plugin : IDalamudPlugin
             loadedFontSize = config.FontSize;
         }
         using var fontScope = timelineFont.Push();
+        var now = Now;
+        DrawBars(now, false);
+        if (config.ShowDurations)
+            DrawBars(now, true);
+    }
+
+    private void DrawBars(double now, bool durations)
+    {
+        var dokuLeft = durations ? targetEffects.Remaining(3849) : (float)dokumori.Remaining(now);
+        var potLeft = durations ? playerEffects.Remaining(49) : potionRemaining;
+        var showPreview = preview || !config.Locked;
+        int buffCount = partyBuffs.Count(buff => showPreview ||
+            (durations ? buff.DurationRemaining(playerEffects) : buff.Timer.Remaining(now)) > 0);
+        if (!showPreview && dokuLeft <= 0 && potLeft <= 0 && buffCount == 0)
+            return;
+        ref var position = ref (durations ? ref config.DurationPosition : ref config.Position);
 
         var flags = ImGuiWindowFlags.NoTitleBar | ImGuiWindowFlags.NoResize |
             ImGuiWindowFlags.NoScrollbar | ImGuiWindowFlags.NoScrollWithMouse |
             ImGuiWindowFlags.NoBackground | ImGuiWindowFlags.NoFocusOnAppearing | ImGuiWindowFlags.NoNav | ImGuiWindowFlags.NoMove;
         if (config.Locked)
             flags |= ImGuiWindowFlags.NoInputs | ImGuiWindowFlags.NoMove;
-        ImGui.SetNextWindowPos(config.Position, ImGuiCond.Always);
-        int count = (dokuLeft > 0 || showPreview ? 1 : 0) + (potionRemaining > 0 || showPreview ? 1 : 0) + buffCount;
+        ImGui.SetNextWindowPos(position, ImGuiCond.Always);
+        int count = (dokuLeft > 0 || showPreview ? 1 : 0) + (potLeft > 0 || showPreview ? 1 : 0) + buffCount;
         float rowHeight = Math.Max(config.Height, ImGui.GetTextLineHeight() + ImGui.GetStyle().FramePadding.Y * 2);
         ImGui.SetNextWindowSize(new Vector2(config.Width, count * (rowHeight + ImGui.GetStyle().ItemSpacing.Y)));
         ImGui.PushStyleVar(ImGuiStyleVar.WindowRounding, 0);
         ImGui.PushStyleVar(ImGuiStyleVar.WindowPadding, Vector2.Zero);
         ImGui.PushStyleVar(ImGuiStyleVar.WindowBorderSize, 0);
-        if (ImGui.Begin("Burst Timers##bars", flags))
+        if (ImGui.Begin(durations ? "Burst Timers##durations" : "Burst Timers##bars", flags))
         {
+            float total = durations ? 20 : 120;
+            string suffix = durations ? " (active)" : "";
             if (dokuLeft > 0 || showPreview)
-                DrawBar("Dokumori", dokuLeft > 0 ? dokuLeft : 72, 120, offensive: true);
+                DrawBar("Dokumori" + suffix, dokuLeft > 0 ? dokuLeft : total * 0.6f, Math.Max(total, dokuLeft), offensive: true);
             foreach (var buff in partyBuffs)
             {
-                var remaining = (float)buff.Timer.Remaining(now);
+                var remaining = durations ? buff.DurationRemaining(playerEffects) : (float)buff.Timer.Remaining(now);
                 if (remaining > 0 || showPreview)
-                    DrawBar(buff.Name, remaining > 0 ? remaining : 72, 120);
+                    DrawBar(buff.Name + suffix, remaining > 0 ? remaining : total * 0.6f, Math.Max(total, remaining));
             }
-            if (potionRemaining > 0 || showPreview)
-                DrawBar("Potion", potionRemaining > 0 ? potionRemaining : 45, potionRemaining > 0 ? potionTotal : 270);
+            if (potLeft > 0 || showPreview)
+                DrawBar("Potion" + suffix, potLeft > 0 ? potLeft : (durations ? 18 : 45), durations ? Math.Max(30, potLeft) : (potLeft > 0 ? potionTotal : 270));
             if (!config.Locked && ImGui.IsWindowHovered() && ImGui.IsMouseDragging(ImGuiMouseButton.Left))
             {
-                config.Position += ImGui.GetIO().MouseDelta;
+                position += ImGui.GetIO().MouseDelta;
             }
             if (!config.Locked && ImGui.IsMouseReleased(ImGuiMouseButton.Left))
                 Save();
@@ -176,13 +199,15 @@ public sealed unsafe class Plugin : IDalamudPlugin
             ImGui.TextUnformatted("Potion: your actual tincture / gemdraught cooldown.");
             ImGui.Separator();
             bool changed = ImGui.Checkbox("Lock bars (click through)", ref config.Locked);
+            changed |= ImGui.Checkbox("Show active buff/debuff duration bars", ref config.ShowDurations);
             ImGui.Checkbox("Preview bars", ref preview);
-            ImGui.TextDisabled("Unlock and drag the bars to move them.");
+            ImGui.TextDisabled("Unlock and drag each group independently to move it.");
             changed |= ImGui.SliderFloat("Width", ref config.Width, 180, 800, "%.0f");
             changed |= ImGui.SliderFloat("Height", ref config.Height, 20, 60, "%.0f");
             changed |= ImGui.SliderFloat("Text size", ref config.FontSize, 12, 40, "%.0f");
             ImGui.TextDisabled("Cactus Watcher font, progress bars, colors and label layout.");
             if (ImGui.Button("Reset position")) { config.Position = new(400, 400); changed = true; }
+            if (ImGui.Button("Reset duration position")) { config.DurationPosition = config.Position + new Vector2(config.Width + 20, 0); changed = true; }
             ImGui.SameLine();
             if (ImGui.Button("Clear Dokumori timer")) dokumori.Reset();
             if (ImGui.Button("Clear party buff timers"))

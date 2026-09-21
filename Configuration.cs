@@ -12,4 +12,6 @@ public sealed class Configuration : IPluginConfiguration
     public float Height = 30;
     public float FontSize = 23;
     public Vector2 Position = new(400, 400);
+    public Vector2 DurationPosition = new(760, 400);
+    public bool ShowDurations = true;
 }

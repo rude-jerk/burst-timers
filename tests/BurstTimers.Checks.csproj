@@ -5,6 +5,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
   </PropertyGroup>
   <ItemGroup>
+    <Compile Include="../ActiveEffects.cs" Link="ActiveEffects.cs" />
     <Compile Include="../StatusCooldownTimer.cs" Link="StatusCooldownTimer.cs" />
     <Compile Include="../PartyBuffTracker.cs" Link="PartyBuffTracker.cs" />
   </ItemGroup>
