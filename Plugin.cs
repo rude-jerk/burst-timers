@@ -120,7 +120,7 @@ public sealed unsafe class Plugin : IDalamudPlugin
         if (ImGui.Begin("Burst Timers##bars", flags))
         {
             if (dokuLeft > 0 || showPreview)
-                DrawBar("Dokumori", dokuLeft > 0 ? dokuLeft : 72, 120);
+                DrawBar("Dokumori", dokuLeft > 0 ? dokuLeft : 72, 120, offensive: true);
             foreach (var buff in partyBuffs)
             {
                 var remaining = (float)buff.Timer.Remaining(now);
@@ -141,14 +141,18 @@ public sealed unsafe class Plugin : IDalamudPlugin
     }
 
     // Adapted from Cactus Watcher RaidbossTimelineWindow (MIT; see LICENSE.CactusWatcher).
-    private void DrawBar(string label, float remaining, float total)
+    private void DrawBar(string label, float remaining, float total, bool offensive = false)
     {
         var size = new Vector2(config.Width * 0.98f, config.Height);
         var progress = Math.Clamp(remaining / total, 0, 1);
         var hundredths = (int)(Math.Max(0, remaining) * 100);
         var caption = $"{hundredths / 6000:00}:{hundredths / 100 % 60:00}.{hundredths % 100:00} - {label}";
-        // Cactus Watcher's preview palette: periwinkle, changing to salmon near completion.
-        ImGui.PushStyleColor(ImGuiCol.PlotHistogram, progress < 0.2f ? 0xFF7878FFu : 0xFFFF8888u);
+        // Dokumori uses an offensive orange palette, deepening near completion.
+        // Other bars retain Cactus Watcher's periwinkle/salmon preview palette.
+        uint color = offensive
+            ? (progress < 0.2f ? 0xFF2870FFu : 0xFF40B0FFu)
+            : (progress < 0.2f ? 0xFF7878FFu : 0xFFFF8888u);
+        ImGui.PushStyleColor(ImGuiCol.PlotHistogram, color);
         try
         {
             ImGui.ProgressBar(progress, size, string.Empty);
